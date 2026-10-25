@@ -1,0 +1,4 @@
+interface:
+  display_name: "嵌入式影响面与验证"
+  short_description: "改前查调用方与影响半径，改后按静态、编译、下载、运行四档交证据"
+  default_prompt: "使用 $embedded-impact-verify，为本次改动列出影响面，并按四档报告验证证据。"

@@ -1,0 +1,6 @@
+interface:
+  display_name: "面试录音复盘"
+  short_description: "完整整理面试问答、追问与反问并给出改进"
+  default_prompt: "使用 $interview-record-review 复盘这份面试录音，保留完整问答和反问环节，并标出回答不足。"
+policy:
+  allow_implicit_invocation: true

@@ -1,0 +1,4 @@
+interface:
+  display_name: "嵌入式代码变更归档"
+  short_description: "归档到项目内更新记录，含差异表、四档验证证据和复习卡"
+  default_prompt: "使用 $embedded-change-archive，根据提供的代码和历史材料生成简洁、准确、便于回顾的变更归档。"
