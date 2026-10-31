@@ -148,6 +148,7 @@ Claude Code / Codex：
 - [ ] 全局或工程级 `opencode.json` 的 `instructions` 指向正确的绝对路径（或已说明需人工放置）
 - [ ] 没有写入其他运行时的目录
 - [ ] 备份目录路径已记录
+- [ ] 安装目录根已生成 `SOURCE.md`，且记录的 commit 与本仓库 `git rev-parse --short HEAD` 一致
 
 ## 第 6 步：报告
 
@@ -161,10 +162,74 @@ Claude Code / Codex：
 - 嵌入式规则：<路径>；引入方式：全局 `instructions` / 工程级 `opencode.json` / 待人工放置
 - 备份：<目录>（无覆盖时写“无”）
 - 回滚：删除 <技能目录> 下新增目录，删除入口文件中的标记块，必要时从备份恢复
+- 来源卡：<路径>（commit <hash>，<clean/dirty>）
 - 未完成项：<列出，没有则写“无”>
 - 使用手册：<本仓库绝对路径>/使用手册.md（告诉用户这份文件的位置）
 - 验证方法：发送 `>>help`，应只输出入口说明；发送 `>>safe`，应先播报成本而不是直接开始
 ```
+
+## 跨机器维护与自动定位
+
+本仓库由 GitHub 统一管理，会在多台机器上使用。**仓库内不写任何绝对路径**（`install.ps1` 用 `$PSScriptRoot`，文档写相对路径或占位符），换盘、换用户名都不失效。
+
+### 副本怎么知道自己来自哪
+
+每次安装，`install.ps1` 会往安装目录根写一张 `SOURCE.md`（生成物，不进仓库）：
+
+```markdown
+- 仓库：https://github.com/<owner>/<repo>.git
+- 本次安装来自：commit 1f49447
+- 安装时工作区：clean
+- 安装时间：2026-10-31 14:07:24
+- 运行时：opencode
+- 本机真源路径：<这台机器上的 clone 位置>
+```
+
+`-Verify` 会比对这张卡的 commit 与真源 HEAD，多出一行：
+
+| 输出 | 含义 | 动作 |
+| --- | --- | --- |
+| `OK   SOURCE.md（副本与真源同为 commit X）` | 一致 | 无 |
+| `LAG  SOURCE.md（副本 A / 真源 B，建议 -Force 重装）` | 副本落后 | 重装 |
+| `MISSING SOURCE.md` | 老版本装的，或卡被删 | 跑一次 `-Force` |
+| `SKIP SOURCE.md` | 真源不是 git 目录或 git 不可用 | 无（降级，不报错） |
+
+### 四层定位顺序
+
+要改规则时，按顺序找真源，**找到就停**：
+
+| 层 | 动作 | 命中场景 |
+| --- | --- | --- |
+| 1 | 读 `SOURCE.md` 的「本机真源路径」，验 `git remote get-url origin` | 已经在用的机器（0 询问） |
+| 2 | 看 `$env:WORKFLOW_REPO` 指向的目录，同样验 remote | 用户显式指定 |
+| 3 | 把 `SOURCE.md` 里的仓库 URL clone 到 `$env:USERPROFILE\workflow-src`，再验 remote | 新机器第一次（0 询问） |
+| 4 | 停止，按下面的固定话术索取 | 前三层都失败 |
+
+**判定只认 remote**：`git remote get-url origin` 的返回值里包含本仓库名才算真源。不看目录名——用得久了总会有人把文件夹改名，也可能 clone 到别的盘。
+
+### 层 4 的固定话术
+
+> 这台机器上没有找到工作流真源。当前副本来自 commit `<SOURCE.md 里的值>`。
+> 要改规则，请先执行 `gh repo clone <仓库 URL>`，然后把目录路径告诉我。
+> **我不会直接改安装副本**，因为下次重装会覆盖，而且不会进 git。
+
+私有仓库的认证前提：`gh auth login` 或 Git Credential Manager 已登录。**不向用户索取 token、密码，也不要用户粘贴凭据。**
+
+### 日常三条命令
+
+```powershell
+# 改了规则之后（在真源目录）
+git commit -am "..." ; git push
+.\install.ps1 -Full -Runtime opencode -Force
+
+# 另一台机器同步
+git pull ; .\install.ps1 -Full -Runtime opencode -Force
+
+# 任何时候确认自己在哪一版
+.\install.ps1 -Full -Runtime opencode -Verify
+```
+
+**唯一允许改的是真源。** 副本和投递导出都只读。
 
 ## 未知运行时分支
 
@@ -200,3 +265,4 @@ Claude Code / Codex：
 3. 审查者：删除第 3 步复制的文件。
 4. 嵌入式规则：删除全局或工程级 `opencode.json` 中对应的 `instructions` 条目（该文件只为此而生时可直接删除），再删除 `<运行时主目录>/embedded.md`。
 5. 回滚后发送 `>>help`，确认不再输出入口说明。
+6. 来源卡：删除 `<运行时主目录>/SOURCE.md`。它只是元信息，删除不影响规则生效，只是下次 `-Verify` 会报 `MISSING`。
