@@ -43,6 +43,80 @@ if (-not $Destination) {
 $installRoot = Split-Path -Parent $Destination
 $skillRoot = Join-Path $PSScriptRoot 'skills'
 
+# ---------------------------------------------------------------- 来源卡
+
+# 读取真源仓库信息。git 不可用时各项为 $null，不影响安装。
+function Get-RepoInfo {
+    $info = [pscustomobject]@{ Root = $PSScriptRoot; Url = $null; Commit = $null; Dirty = 0 }
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return $info }
+    try {
+        Push-Location -LiteralPath $PSScriptRoot
+        $u = & git remote get-url origin 2>$null
+        if ($LASTEXITCODE -eq 0 -and $u) { $info.Url = ([string]$u).Trim() }
+        $c = & git rev-parse --short HEAD 2>$null
+        if ($LASTEXITCODE -eq 0 -and $c) { $info.Commit = ([string]$c).Trim() }
+        $st = @(& git status --porcelain 2>$null | Where-Object { $_ })
+        $info.Dirty = $st.Count
+    } catch {
+    } finally {
+        Pop-Location
+    }
+    return $info
+}
+
+# 往安装副本根目录写来源卡：换机器时据此判断副本来自哪个 commit。
+function Write-SourceCard {
+    param($Info)
+    $cardPath = Join-Path $installRoot 'SOURCE.md'
+    try {
+        $url = if ($Info.Url) { $Info.Url } else { 'unknown（未取到 git remote）' }
+        $commit = if ($Info.Commit) { $Info.Commit } else { 'unknown（非 git 目录或 git 不可用）' }
+        $dirty = if ($Info.Dirty -gt 0) { "dirty（$($Info.Dirty) 个文件未提交）" } else { 'clean' }
+        $runtimeName = if ($Runtime) { $Runtime } else { '未指定' }
+        $lines = @(
+            '# 工作流来源（自动生成，勿手工编辑，不进仓库）'
+            ''
+            ('- 仓库：' + $url)
+            ('- 本次安装来自：commit ' + $commit)
+            ('- 安装时工作区：' + $dirty)
+            ('- 安装时间：' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
+            ('- 运行时：' + $runtimeName)
+            ('- 本机真源路径：' + $Info.Root)
+            ''
+            '本目录是安装副本。直接修改无效，下次 -Force 会被覆盖，且不会进 git。'
+            '改规则请编辑真源，然后重新运行 install.ps1 -Force。'
+        )
+        [IO.File]::WriteAllText($cardPath, ($lines -join "`r`n") + "`r`n", [Text.UTF8Encoding]::new($false))
+        Write-Output ("Source card written: {0} (commit {1})" -f $cardPath, $commit)
+    } catch {
+        Write-Output ("WARNING: 无法写入来源卡 {0}：{1}" -f $cardPath, $_.Exception.Message)
+    }
+}
+
+# Verify 时比对：副本记录的 commit 与真源当前 commit 是否一致。
+function Report-SourceCard {
+    $info = Get-RepoInfo
+    $cardPath = Join-Path $installRoot 'SOURCE.md'
+    if (-not (Test-Path -LiteralPath $cardPath)) {
+        Write-Output 'MISSING  SOURCE.md（副本未记录来源，无法判断版本关系）'
+        $script:drift = $true
+        return
+    }
+    $text = [IO.File]::ReadAllText($cardPath, [Text.Encoding]::UTF8)
+    $recorded = $null
+    if ($text -match '本次安装来自：commit\s+(\S+)') { $recorded = $Matches[1] }
+    if (-not $info.Commit) {
+        Write-Output ("SKIP     SOURCE.md（真源 commit 不可用；副本记录 {0}）" -f $recorded)
+        return
+    }
+    if ($recorded -eq $info.Commit) {
+        Write-Output ("OK       SOURCE.md（副本与真源同为 commit {0}）" -f $info.Commit)
+    } else {
+        Write-Output ("LAG      SOURCE.md（副本 {0} / 真源 {1}，建议 -Force 重装）" -f $recorded, $info.Commit)
+        $script:drift = $true
+    }
+}
+
 if ($Full) {
     $All = $true
     $Agents = $true
@@ -173,6 +247,9 @@ if ($Verify) {
             $script:drift = $true
         }
     }
+
+    # 来源卡：判断副本相对真源是否落后（跨机器维护的第一判据）
+    Report-SourceCard
 
     if ($All) {
         foreach ($dir in $available) {
@@ -405,6 +482,8 @@ if ($EmbeddedGlobal) {
 if ($Manual) {
     Sync-File (Join-Path $PSScriptRoot '使用手册.md') (Join-Path $installRoot '使用手册.md') '使用手册.md' 'manual'
 }
+
+Write-SourceCard (Get-RepoInfo)
 
 Write-Output ''
 Write-Output "Install root: $installRoot"
