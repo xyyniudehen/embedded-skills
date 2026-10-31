@@ -2,7 +2,7 @@
 
 适用于所有任务，与具体技术栈无关。
 
-嵌入式专项规则（保险模式、每轮三行、入口提示、归档流程）不在这里，见 `global/embedded.md`，只在嵌入式工程目录生效。各运行时的安装位置见 `README-INSTALL.md`。
+嵌入式专项规则（保险模式、每轮三行、入口提示、归档流程）不在这里，见 `global/embedded.md`。OpenCode 默认把它的绝对路径写进全局 `opencode.json` 的 `instructions`，所有目录常驻；也可以用 `-EmbeddedRoot` 改成只在指定工程树生效。各运行时的安装位置见 `README-INSTALL.md`。
 
 ## 通用行为
 
@@ -81,7 +81,7 @@
 | 层 | 文件 | 生效范围 |
 | --- | --- | --- |
 | 全局规则 | `global/AGENTS.md` | 所有任务 |
-| 嵌入式规则 | `global/embedded.md` | 仅嵌入式工程目录（由该目录的 `opencode.json` 的 `instructions` 引入） |
+| 嵌入式规则 | `global/embedded.md` | 默认全局常驻（由全局 `opencode.json` 的 `instructions` 引入）；可用 `-EmbeddedRoot` 限定到工程树 |
 | 技能正文 | `skills/*/SKILL.md` | 匹配时加载，任意目录 |
 | 审查者 | `agents/embedded-reviewer.md` | 被派发时 |
 

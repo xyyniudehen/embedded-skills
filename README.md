@@ -12,7 +12,7 @@
 | `skills/interview-round-prep` | 按一面、二面、终面和HR面组织面试准备 |
 | `skills/interview-record-review` | 面试录音/逐字稿的完整问答、追问、反问和改进复盘 |
 | `global/AGENTS.md` | 全局协作规则：通用行为、模式开关、归档规则、技能索引，所有任务生效 |
-| `global/embedded.md` | 嵌入式专项规则：STM32/MCU/RTOS 基调、ISR/DMA 上下文、编码与配置核对，仅在嵌入式目录生效 |
+| `global/embedded.md` | 嵌入式专项规则：STM32/MCU/RTOS 基调、ISR/DMA 上下文、编码与配置核对，默认全局常驻 |
 | `agents/embedded-reviewer.md` | 只读审查者提示词，保险模式收口时使用 |
 | `README-INSTALL.md` | 给其他 AI 的自安装说明，含未知运行时的降级方式 |
 | `使用手册.md` | 面向人：四层结构、每个技能怎么用、速查表、常见问题 |
@@ -21,7 +21,7 @@
 
 ## 工作流概览
 
-两种模式，默认正常流程。**保险模式和归档只在嵌入式工程目录里生效**，在写网页、整理面试材料时不存在这些入口。
+两种模式，默认正常流程。**保险模式和归档由 `global/embedded.md` 定义；安装时默认全局常驻，也可以用 `-EmbeddedRoot` 限定到指定工程树。**
 
 | | 正常流程（默认） | 保险模式（成本较高） |
 | --- | --- | --- |
@@ -42,35 +42,46 @@
 
 ### 规则分层
 
-只把跨领域的东西放全局，专用规则放目录级，避免写网页或整理面试材料时也被嵌入式规则占上下文。
+只把跨领域的东西放全局；嵌入式规则单独成文件，安装时默认写进全局 `opencode.json` 的 `instructions`，所有目录常驻。不想让它占用非嵌入式任务的上下文时，用 `-EmbeddedRoot` 改成只在指定工程树生效。
 
 | 层 | 文件 | 内容 | 生效范围 | 每轮都在？ |
 | --- | --- | --- | --- | --- |
 | 全局规则 | `global/AGENTS.md` | 通用行为、文档规范、四条硬约束、技能索引 | 所有任务 | 是 |
-| 嵌入式规则 | `global/embedded.md` | 工程规则、保险模式、每轮三行、入口提示、归档 | 仅嵌入式工程目录 | 否，目录级引入后才有 |
+| 嵌入式规则 | `global/embedded.md` | 工程规则、保险模式、每轮三行、入口提示、归档 | 默认全局；可用 `-EmbeddedRoot` 限定 | 是（全局时） |
 | 技能正文 | `skills/*/SKILL.md` | 具体流程 | 匹配时加载，任意目录 | 否 |
 | 审查者 | `agents/embedded-reviewer.md` | 只读审查 | 被派发时 | 否 |
 
-OpenCode 的目录级引入方式：在嵌入式工程父目录放一个 `opencode.json`，用 `instructions` 指向 `embedded.md`：
+OpenCode 的两种引入方式：
 
-```jsonc
-{
-  "$schema": "https://opencode.ai/config.json",
-  "instructions": ["E:/path/to/embedded-skills/global/embedded.md"]
-}
-```
+1. **全局常驻（默认）**：安装脚本把 `<安装根>/embedded.md` 的绝对路径追加到 `~/.config/opencode/opencode.json`：
 
-配置文件的搜索会一直向上找到根目录，所以放在 `E:\xieyiyi\gz\stm32\` 就覆盖其下所有工程；`AGENTS.md` 的加载到项目根就停，放上一级不一定生效，因此这里用 `opencode.json`。
+   ```jsonc
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "instructions": ["C:/Users/<你>/.config/opencode/embedded.md"]
+   }
+   ```
 
-Claude Code 和 Codex 没有等价机制时，把 `embedded.md` 复制到工程根并改名为 `AGENTS.md`（Claude 为 `CLAUDE.md`）。
+   任意目录启动都会加载；修改 `embedded.md` 后不需要重装。
+
+2. **限定工程树**：`-EmbeddedRoot <工程根>` 会在该目录写 `opencode.json`。配置只从 cwd 向上找，所以要写在实际工程根，不要写公共父目录（会污染兄弟目录）。
+
+Claude Code 和 Codex 没有等价的 `instructions` 文件数组时，把 `embedded.md` 复制到工程根并改名为 `AGENTS.md`（Claude 为 `CLAUDE.md`）。
 
 ## 安装和同步
 
 新机器拿到仓库后，一条命令即可（自动识别运行时）：
 
 ```powershell
-.\bootstrap.ps1 -EmbeddedRoot 'D:\你的嵌入式工程父目录' -Force
-.\bootstrap.ps1 -Verify -EmbeddedRoot 'D:\你的嵌入式工程父目录'
+.\bootstrap.ps1 -Force
+.\bootstrap.ps1 -Verify
+```
+
+只想在指定工程树生效时，再加上 `-EmbeddedRoot`：
+
+```powershell
+.\bootstrap.ps1 -EmbeddedRoot 'D:\你的嵌入式工程根' -Force
+.\bootstrap.ps1 -Verify -EmbeddedRoot 'D:\你的嵌入式工程根'
 ```
 
 也可以直接调用安装脚本：
@@ -87,19 +98,20 @@ Claude Code 和 Codex 没有等价机制时，把 `embedded.md` 复制到工程�
 .\install.ps1 -SkillName interview-record-review -Force
 ```
 
-`-Full` 等价于 `-All -Agents -Manual -EmbeddedRules -InstallGlobalRules`。各参数的作用：
+`-Full` 等价于 `-All -Agents -Manual -EmbeddedRules -InstallGlobalRules`，装到 OpenCode 时还会自动加 `-EmbeddedGlobal`。各参数的作用：
 
 | 参数 | 装什么 | 装到哪 |
 | --- | --- | --- |
 | `-All` / `-SkillName` | 技能 | `<Destination>/<技能名>/` |
-| `-Agents` | `agents/embedded-reviewer.md` | `<安装根>/agents/` |
+| `-Agents` | `agents/embedded-reviewer.md` | `<安装根>/agents/`（OpenCode 自动补 frontmatter，装成只读 subagent） |
 | `-InstallGlobalRules` | `global/AGENTS.md` | `<安装根>/AGENTS.md`（Claude 为 `CLAUDE.md`） |
 | `-EmbeddedRules` | `global/embedded.md` | `<安装根>/embedded.md` |
-| `-EmbeddedRoot` | 目录级 `opencode.json` | `<EmbeddedRoot>/opencode.json`，已存在时只提示不改写 |
+| `-EmbeddedGlobal` | 全局 `instructions` | `<安装根>/opencode.json` 追加 `embedded.md` 绝对路径 |
+| `-EmbeddedRoot` | 目录级 `opencode.json` | `<EmbeddedRoot>/opencode.json` |
 | `-Manual` | `使用手册.md` | `<安装根>/使用手册.md` |
 | `-Verify` | 只比对、不写入，有差异时退出码 1 | — |
 
-只想让嵌入式规则在某个目录生效时，加上 `-EmbeddedRoot`：
+只想让嵌入式规则在某个工程树生效时，加 `-EmbeddedRoot`（会覆盖默认的全局常驻）：
 
 ```powershell
 .\install.ps1 -Full -Runtime opencode -EmbeddedRoot 'E:\xieyiyi\gz\stm32'
@@ -164,7 +176,7 @@ EXTRA    skills/old-skill（安装目录有，仓库没有）
 
 ### 路径说明
 
-目录级 `opencode.json` 指向的是**安装副本**（如 `C:/Users/Admin/.config/opencode/embedded.md`），不是仓库路径。这样换机器、挪仓库都不会失效；代价是改完仓库要重装一次才生效——这正是 `-Verify` 存在的意义。
+全局 `instructions` 和目录级 `opencode.json` 指向的都是**安装副本**（如 `C:/Users/Admin/.config/opencode/embedded.md`），不是仓库路径。这样换机器、挪仓库都不会失效；代价是改完仓库要重装一次才生效——这正是 `-Verify` 存在的意义。
 
 ## 维护要求
 

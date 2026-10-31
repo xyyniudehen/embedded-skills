@@ -35,8 +35,8 @@ if ($Runtime -eq 'auto') {
 }
 
 if (-not $EmbeddedRoot) {
-    Write-Output '提示：未提供 -EmbeddedRoot，嵌入式规则不会绑定到任何目录（只装全局部分）。'
-    Write-Output "例如：.\bootstrap.ps1 -Runtime $Runtime -EmbeddedRoot 'E:\xieyiyi\gz\stm32' -Force"
+    Write-Output '未提供 -EmbeddedRoot：嵌入式规则将写入全局 instructions，对所有目录生效。'
+    Write-Output "只想限定到某个工程树时：.\bootstrap.ps1 -Runtime $Runtime -EmbeddedRoot '<工程根>' -Force"
 }
 
 $install = Join-Path $PSScriptRoot 'install.ps1'

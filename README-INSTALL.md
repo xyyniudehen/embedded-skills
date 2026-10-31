@@ -9,33 +9,33 @@
 已经拿到本仓库（clone、拷贝或解压）后，在仓库目录执行：
 
 ```powershell
-# 1. 安装（自动识别 OpenCode / Codex / Claude）
-.\bootstrap.ps1 -EmbeddedRoot 'D:\你的嵌入式工程父目录' -Force
+# 1. 安装（自动识别 OpenCode / Codex / Claude；嵌入式规则默认全局常驻）
+.\bootstrap.ps1 -Force
 
-# 2. 校验（只读；带上同样的 -EmbeddedRoot 才会检查目录级配置）
-.\bootstrap.ps1 -Verify -EmbeddedRoot 'D:\你的嵌入式工程父目录'
+# 2. 校验（只读；带上同样的参数）
+.\bootstrap.ps1 -Verify
 ```
 
 - 不想自动识别：加 `-Runtime opencode|codex|claude`
-- PowerShell 拦截脚本时：`powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -EmbeddedRoot 'D:\...' -Force`
+- PowerShell 拦截脚本时：`powershell -ExecutionPolicy Bypass -File .\bootstrap.ps1 -Force`
 - 不是 Windows，或没有 PowerShell：继续读下面的手工步骤，或把本文件交给你的 AI 让它照做
-- `-EmbeddedRoot` 换成**这台机器上**嵌入式工程的父目录，不要照抄别的机器
+- 想限定嵌入式规则只对某个工程树生效：加 `-EmbeddedRoot '<这台机器上的工程根>'`，不要照抄别的机器
 
 ## 第 0 步：识别你所在的运行时
 
 如果你能执行 PowerShell，优先直接运行安装脚本，它会一次装齐技能、审查者、全局规则、嵌入式规则和使用手册：
 
 ```powershell
-.\install.ps1 -Full -Runtime opencode -EmbeddedRoot 'E:\xieyiyi\gz\stm32'
+.\install.ps1 -Full -Runtime opencode
 ```
 
 装完或改动后用 `-Verify` 只读检查是否一致：
 
 ```powershell
-.\install.ps1 -Full -Runtime opencode -EmbeddedRoot 'E:\xieyiyi\gz\stm32' -Verify
+.\install.ps1 -Full -Runtime opencode -Verify
 ```
 
-`-EmbeddedRoot` 会在该目录写一个 `opencode.json`，把嵌入式规则限制在该工程树内生效；不加则只提示你手动放置。
+`-Full` 装到 OpenCode 时会把 `embedded.md` 的绝对路径写进全局 `opencode.json` 的 `instructions`，默认对所有目录生效。想限定到某个工程树时改用 `-EmbeddedRoot '<工程根>'`：它会在该目录写一个 `opencode.json`，不再写全局 `instructions`。
 
 目标机器无法运行脚本，或运行时不在上面三个之中时，继续下面的手工步骤。
 
@@ -106,28 +106,29 @@
 4. **严禁重写、删除或重排用户已有的规则。**
 5. 同一文件里只能存在一个该标记块。
 
-### 嵌入式规则（目录级，不要放全局）
+### 嵌入式规则（默认全局常驻，可限定目录）
 
-来源：本仓库 `global/embedded.md`。它只对嵌入式工程生效，**不要合并进全局入口文件**。
+来源：本仓库 `global/embedded.md`。**不要把它整段并进 `AGENTS.md`**；用 `instructions` 引入文件，改动才不用重装。
 
 OpenCode：
 
 1. 把 `embedded.md` 复制到 `<运行时主目录>/embedded.md`（例如 `~/.config/opencode/embedded.md`）。
-2. 在嵌入式工程的父目录创建或合并 `opencode.json`，加入：
+2. 默认把该绝对路径追加到全局 `~/.config/opencode/opencode.json` 的 `instructions`：
 
    ```jsonc
    {
      "$schema": "https://opencode.ai/config.json",
-     "instructions": ["<embedded.md 的绝对路径>"]
+     "instructions": ["C:/Users/<你>/.config/opencode/embedded.md"]
    }
    ```
 
-3. 目标 `opencode.json` 已存在时，只追加 `instructions` 里的条目，不改其他字段；`instructions` 数组会合并，不是覆盖。
-4. 该目录下已有 `opencode.json` 且无法安全合并时，输出要添加的那一行，让用户手动加。
+3. 只想限定到某个工程树时，改为在该工程根创建或合并 `opencode.json`，写同一条 `instructions`。配置只从 cwd 向上找，所以写工程根，不写公共父目录。
+4. 目标 `opencode.json` 已存在时，只追加 `instructions` 里的条目，不改其他字段；`instructions` 数组会合并，不是覆盖。
+5. 无法安全合并（JSONC、格式特殊）时，输出要添加的那一行，让用户手动加。
 
 Claude Code / Codex：
 
-- 没有目录级 `instructions` 机制时，把 `embedded.md` 复制到工程根并改名为 `AGENTS.md`（Claude 为 `CLAUDE.md`）。
+- 没有 `instructions` 文件数组时，把 `embedded.md` 复制到工程根并改名为 `AGENTS.md`（Claude 为 `CLAUDE.md`）。
 - 一个父目录覆盖多个工程的做法在部分运行时不可靠，宁可每个工程根放一份。
 
 ## 第 5 步：自检
@@ -142,8 +143,9 @@ Claude Code / Codex：
 - [ ] 入口规则块包含每轮技能评估（输出 `技能：<id>` 或 `技能：无`）
 - [ ] 入口规则块包含手动加载说明（`@<技能ID>` 与 `>>use <短名>` 对照表）
 - [ ] 审查者文件存在，或已说明该运行时不支持
-- [ ] `embedded.md` 已安装，且**没有**被合并进全局入口文件
-- [ ] 目录级 `opencode.json` 的 `instructions` 指向正确的绝对路径（或已说明需人工放置）
+- [ ] OpenCode 下审查者是 `mode: subagent`，且 `edit`/`shell` 为 `deny`（`opencode debug agents` 可查）
+- [ ] `embedded.md` 已安装，且**没有**被整段合并进全局入口文件
+- [ ] 全局或工程级 `opencode.json` 的 `instructions` 指向正确的绝对路径（或已说明需人工放置）
 - [ ] 没有写入其他运行时的目录
 - [ ] 备份目录路径已记录
 
@@ -156,7 +158,7 @@ Claude Code / Codex：
 - 技能：3 个（列出路径）
 - 审查者：<路径> / 不支持（原因）
 - 入口规则：已追加 / 已替换 / 已创建（<路径>，<行数> 行）
-- 嵌入式规则：<路径>；目录级配置：<opencode.json 路径> / 待人工放置
+- 嵌入式规则：<路径>；引入方式：全局 `instructions` / 工程级 `opencode.json` / 待人工放置
 - 备份：<目录>（无覆盖时写“无”）
 - 回滚：删除 <技能目录> 下新增目录，删除入口文件中的标记块，必要时从备份恢复
 - 未完成项：<列出，没有则写“无”>
@@ -189,12 +191,12 @@ Claude Code / Codex：
 - 不在未确认目标路径时创建文件。
 - 不把本仓库的 `README.md`、`install.ps1` 当成安装目标。
 - 不把入口规则写进项目内的 `AGENTS.md`（那是项目级，不是全局）。
-- 不把 `embedded.md` 合并进全局入口文件（它必须限定在嵌入式目录）。
+- 不把 `embedded.md` 整段并进全局入口文件（要用 `instructions` 引入，改动才不用重装）。
 
 ## 回滚
 
 1. 技能：删除第 2 步新增的目录，或从备份目录恢复。
 2. 入口规则：删除 `<!-- embedded-workflow:start v1 -->` 到 `<!-- embedded-workflow:end -->` 之间的整块。
 3. 审查者：删除第 3 步复制的文件。
-4. 嵌入式规则：删除目录级 `opencode.json` 中对应的 `instructions` 条目（该文件只为此而生时可直接删除），再删除 `<运行时主目录>/embedded.md`。
+4. 嵌入式规则：删除全局或工程级 `opencode.json` 中对应的 `instructions` 条目（该文件只为此而生时可直接删除），再删除 `<运行时主目录>/embedded.md`。
 5. 回滚后发送 `>>help`，确认不再输出入口说明。
