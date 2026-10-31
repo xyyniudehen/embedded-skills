@@ -131,11 +131,31 @@ Claude Code / Codex：
 - 没有 `instructions` 文件数组时，把 `embedded.md` 复制到工程根并改名为 `AGENTS.md`（Claude 为 `CLAUDE.md`）。
 - 一个父目录覆盖多个工程的做法在部分运行时不可靠，宁可每个工程根放一份。
 
+### 学术规则（默认全局常驻）
+
+来源：本仓库 `global/academic.md`。与 `embedded.md` 并列，**同样不要并进 `AGENTS.md`**。
+
+1. 复制到 `<运行时主目录>/academic.md`。
+2. OpenCode 下把它的绝对路径也追加到全局 `instructions`，与 `embedded.md` 并列：
+
+   ```jsonc
+   {
+     "$schema": "https://opencode.ai/config.json",
+     "instructions": [
+       "C:/Users/<你>/.config/opencode/embedded.md",
+       "C:/Users/<你>/.config/opencode/academic.md"
+     ]
+   }
+   ```
+
+3. **只追加实际存在的文件**：某个规则文件没装时，不要写它的路径，否则运行时会读到空配置。
+4. 学术规则靠自身「进入判据 + 不适用即沉默」隔离，不需要按目录限定，**不要给它写 `-EmbeddedRoot` 那种目录级配置**。
+
 ## 第 5 步：自检
 
 逐项确认，并把结果写进报告：
 
-- [ ] 三个技能目录都存在，且各自有 `SKILL.md`
+- [ ] 技能目录都存在，且各自有 `SKILL.md`（嵌入式 3 个 + 学术 3 个 + 面试 2 个）
 - [ ] 每个 `SKILL.md` 的 frontmatter 至少包含 `name` 和 `description`
 - [ ] 技能 ID 与目录名一致（大小写敏感，小写 kebab-case）
 - [ ] 入口规则块恰好一个，起止标记配对
@@ -143,9 +163,9 @@ Claude Code / Codex：
 - [ ] 入口规则块包含每轮技能评估（输出 `技能：<id>` 或 `技能：无`）
 - [ ] 入口规则块包含手动加载说明（`@<技能ID>` 与 `>>use <短名>` 对照表）
 - [ ] 审查者文件存在，或已说明该运行时不支持
-- [ ] OpenCode 下审查者是 `mode: subagent`，且 `edit`/`shell` 为 `deny`（`opencode debug agents` 可查）
-- [ ] `embedded.md` 已安装，且**没有**被整段合并进全局入口文件
-- [ ] 全局或工程级 `opencode.json` 的 `instructions` 指向正确的绝对路径（或已说明需人工放置）
+- [ ] OpenCode 下每个审查者都是 `mode: subagent`，且 `edit`/`shell` 为 `deny`（`opencode debug agents` 可查）
+- [ ] `embedded.md`、`academic.md` 已安装，且**没有**被整段合并进全局入口文件
+- [ ] 全局或工程级 `opencode.json` 的 `instructions` 指向正确的绝对路径，且每条路径对应的文件真实存在（或已说明需人工放置）
 - [ ] 没有写入其他运行时的目录
 - [ ] 备份目录路径已记录
 - [ ] 安装目录根已生成 `SOURCE.md`，且记录的 commit 与本仓库 `git rev-parse --short HEAD` 一致
@@ -156,10 +176,11 @@ Claude Code / Codex：
 ## 安装报告
 
 - 运行时：OpenCode
-- 技能：3 个（列出路径）
+- 技能：<N> 个（列出路径）
 - 审查者：<路径> / 不支持（原因）
 - 入口规则：已追加 / 已替换 / 已创建（<路径>，<行数> 行）
 - 嵌入式规则：<路径>；引入方式：全局 `instructions` / 工程级 `opencode.json` / 待人工放置
+- 学术规则：<路径>；引入方式：全局 `instructions` / 待人工放置
 - 备份：<目录>（无覆盖时写“无”）
 - 回滚：删除 <技能目录> 下新增目录，删除入口文件中的标记块，必要时从备份恢复
 - 来源卡：<路径>（commit <hash>，<clean/dirty>）
@@ -257,6 +278,7 @@ git pull ; .\install.ps1 -Full -Runtime opencode -Force
 - 不把本仓库的 `README.md`、`install.ps1` 当成安装目标。
 - 不把入口规则写进项目内的 `AGENTS.md`（那是项目级，不是全局）。
 - 不把 `embedded.md` 整段并进全局入口文件（要用 `instructions` 引入，改动才不用重装）。
+- 不把 `academic.md` 并进 `AGENTS.md` 或 `embedded.md`（三个文件各自独立，混在一起就分不清哪条来自哪层）。
 
 ## 回滚
 
@@ -266,3 +288,4 @@ git pull ; .\install.ps1 -Full -Runtime opencode -Force
 4. 嵌入式规则：删除全局或工程级 `opencode.json` 中对应的 `instructions` 条目（该文件只为此而生时可直接删除），再删除 `<运行时主目录>/embedded.md`。
 5. 回滚后发送 `>>help`，确认不再输出入口说明。
 6. 来源卡：删除 `<运行时主目录>/SOURCE.md`。它只是元信息，删除不影响规则生效，只是下次 `-Verify` 会报 `MISSING`。
+7. 学术规则：删除 `opencode.json` 中 `academic.md` 对应的 `instructions` 条目，再删除 `<运行时主目录>/academic.md`；学术技能目录按第 1 条同样删除。

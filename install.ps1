@@ -8,6 +8,7 @@
     [switch]$EmbeddedRules,
     [string]$EmbeddedRoot,
     [switch]$EmbeddedGlobal,
+    [switch]$AcademicRules,
     [switch]$InstallGlobalRules,
     [switch]$Force,
     [switch]$Verify,
@@ -122,6 +123,7 @@ if ($Full) {
     $Agents = $true
     $Manual = $true
     $EmbeddedRules = $true
+    $AcademicRules = $true
     $InstallGlobalRules = $true
 }
 
@@ -148,6 +150,22 @@ $openCodeAgentFrontmatter = @{
         '    effect: deny'
         '---'
     ) -join "`r`n"
+    'academic-reviewer.md' = @(
+        '---'
+        'description: 学术只读审稿者：只依据 diff、方向锚点、任务类型和验收标准判断是否偏题，输出 pass / need-info / blocked，不修改任何文件'
+        'mode: subagent'
+        'permissions:'
+        '  - action: edit'
+        '    resource: "*"'
+        '    effect: deny'
+        '  - action: shell'
+        '    resource: "*"'
+        '    effect: deny'
+        '  - action: subagent'
+        '    resource: "*"'
+        '    effect: deny'
+        '---'
+    ) -join "`r`n"
 }
 
 function Get-AgentContent {
@@ -160,8 +178,14 @@ function Get-AgentContent {
     return $openCodeAgentFrontmatter[$name] + "`r`n" + $raw
 }
 
+# 需要写进全局 instructions 的规则文件（安装目录内的文件名，按顺序）。
+$globalRuleFiles = @('embedded.md', 'academic.md')
+
+# 只返回安装副本里真实存在的规则文件，避免 instructions 指向不存在的路径。
 function Get-GlobalInstructionPath {
-    return ((Join-Path $installRoot 'embedded.md') -replace '\\', '/')
+    param([string[]]$Names)
+    if (-not $Names) { $Names = $globalRuleFiles }
+    return @($Names | Where-Object { Test-Path -LiteralPath (Join-Path $installRoot $_) } | ForEach-Object { (Join-Path $installRoot $_) -replace '\\', '/' })
 }
 
 # 判断 opencode.json 的 instructions 是否已包含某条路径（统一分隔符与大小写，避免重复写入）。
@@ -176,26 +200,27 @@ function Test-InstructionEntry {
 
 function Sync-GlobalInstruction {
     $configPath = Join-Path $installRoot 'opencode.json'
-    $expected = Get-GlobalInstructionPath
+    $expected = @(Get-GlobalInstructionPath)
     try {
         if (Test-Path -LiteralPath $configPath) {
             $config = ([IO.File]::ReadAllText($configPath, [Text.Encoding]::UTF8)) | ConvertFrom-Json
         } else {
             $config = [pscustomobject]@{ '$schema' = 'https://opencode.ai/config.json' }
         }
-        if (Test-InstructionEntry $config $expected) {
-            Write-Output "Global instruction already current: $expected"
+        $missing = @($expected | Where-Object { -not (Test-InstructionEntry $config $_) })
+        if ($missing.Count -eq 0) {
+            Write-Output ("Global instruction already current: {0}" -f ($expected -join ', '))
             return
         }
         if (Test-Path -LiteralPath $configPath) { Backup-Target $configPath 'opencode.json' }
         $list = @()
         if ($config.instructions) { $list = @($config.instructions) }
-        $list += $expected
+        foreach ($item in $missing) { $list += $item }
         $config | Add-Member -NotePropertyName instructions -NotePropertyValue $list -Force
         [IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 10) + "`n", [Text.UTF8Encoding]::new($false))
-        Write-Output "Registered global instruction in $configPath -> $expected"
+        Write-Output ("Registered global instruction in {0} -> {1}" -f $configPath, ($missing -join ', '))
     } catch {
-        Write-Output "WARNING: 无法自动更新 $configPath（可能是 JSONC 或格式特殊）。请手动在 instructions 中加入：$expected"
+        Write-Output ("WARNING: 无法自动更新 {0}（可能是 JSONC 或格式特殊）。请手动在 instructions 中加入：{1}" -f $configPath, ($expected -join ', '))
     }
 }
 
@@ -293,20 +318,27 @@ if ($Verify) {
         Report-File (Join-Path $PSScriptRoot 'global\embedded.md') (Join-Path $installRoot 'embedded.md') 'embedded.md'
     }
 
+    if ($AcademicRules) {
+        Report-File (Join-Path $PSScriptRoot 'global\academic.md') (Join-Path $installRoot 'academic.md') 'academic.md'
+    }
+
     if ($EmbeddedGlobal) {
         $configPath = Join-Path $installRoot 'opencode.json'
-        $expected = Get-GlobalInstructionPath
+        $expectedAll = @(Get-GlobalInstructionPath)
         if (-not (Test-Path -LiteralPath $configPath)) {
             Write-Output ("MISSING  {0}（全局 instructions）" -f $configPath)
             $drift = $true
         } else {
             $config = $null
             try { $config = ([IO.File]::ReadAllText($configPath, [Text.Encoding]::UTF8)) | ConvertFrom-Json } catch { $config = $null }
-            if (Test-InstructionEntry $config $expected) {
-                Write-Output 'OK       全局 instructions -> embedded.md'
-            } else {
-                Write-Output ("DRIFT    全局 instructions 缺少 {0}" -f $expected)
-                $drift = $true
+            foreach ($expected in $expectedAll) {
+                $leaf = Split-Path -Leaf $expected
+                if (Test-InstructionEntry $config $expected) {
+                    Write-Output ("OK       全局 instructions -> {0}" -f $leaf)
+                } else {
+                    Write-Output ("DRIFT    全局 instructions 缺少 {0}" -f $expected)
+                    $drift = $true
+                }
             }
         }
     }
@@ -418,7 +450,7 @@ if ($Agents) {
         Sync-Agent $f.FullName (Join-Path $installRoot ('agents\' + $f.Name)) ('agents\' + $f.Name) ('agent ' + $f.Name)
     }
     if ($Runtime -eq 'codex') {
-        Write-Output 'WARNING: Codex 对自定义子代理的支持未核实；若 agents 目录未被识别，请改用新会话方式粘贴 agents/embedded-reviewer.md。'
+        Write-Output 'WARNING: Codex 对自定义子代理的支持未核实；若 agents 目录未被识别，请改用新会话方式粘贴 agents\ 下的审查者文件。'
     }
 }
 
@@ -470,6 +502,10 @@ if ($EmbeddedRules) {
             Write-Output "提示：如需只在嵌入式目录生效，在 <目录>\opencode.json 的 instructions 中加入：$((Join-Path $installRoot 'embedded.md'))"
         }
     }
+}
+
+if ($AcademicRules) {
+    Sync-File (Join-Path $PSScriptRoot 'global\academic.md') (Join-Path $installRoot 'academic.md') 'academic.md' 'academic rules'
 }
 
 if ($EmbeddedGlobal) {

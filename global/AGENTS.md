@@ -48,11 +48,15 @@
 | `embedded-project-dev-style` | 出方案、讲原理、画调用链、拆步骤 | 分析代码、修改方案、调试、梳理调用关系 | 任意目录 |
 | `embedded-impact-verify` | 改前查影响面，改后交四档证据 | 要动已有函数/结构体/宏/配置；改完要验收 | 任意目录 |
 | `embedded-change-archive` | 归档到项目内 `更新记录/` | 功能完成、用户说“归档”、版本发布前 | 任意目录 |
+| `academic-voice` | 学术写作的用词、句式、缩写、文献、篇幅 | 改正文、摘要、文献回顾、图题；问“这句怎么改” | 任意目录 |
+| `academic-sim-run` | MATLAB 仿真的写法、运行、复现、出图 | 跑 `.m`、改仿真代码、换机器跑、重新出图 | 任意目录 |
+| `academic-audit` | 按 PDF 评阅，出带位置的问题清单 | 审稿、投稿前自查、“看看这篇有什么问题” | 任意目录 |
 | `interview-round-prep` | 面试分轮准备 | 面试前 | 任意目录 |
 | `interview-record-review` | 面试录音复盘 | 面试后 | 任意目录 |
-| `embedded-reviewer`（非技能） | 只读审查者 | 保险模式收口；或新会话审 diff | 任意目录 |
+| `embedded-reviewer`（非技能） | 只读代码审查者 | 保险模式收口；或新会话审 diff | 任意目录 |
+| `academic-reviewer`（非技能） | 学术只读审稿者 | 论文/仿真改动的方向守卫 | 任意目录 |
 
-技能本身可全局调用；保险模式和归档**流程**只在嵌入式目录自动生效。
+技能本身可全局调用；保险模式和归档**流程**只在嵌入式规则里定义，学术任务只换锚点（见 `global/academic.md`）。
 
 回答时给出“怎么触发”的具体说法，例如“直接说‘这个函数为什么进不了中断’就会命中第一个技能”，不只列名字。
 
@@ -68,6 +72,9 @@
    | `dev` | `embedded-project-dev-style` |
    | `impact` | `embedded-impact-verify` |
    | `archive` | `embedded-change-archive` |
+   | `voice` | `academic-voice` |
+   | `sim` | `academic-sim-run` |
+   | `audit` | `academic-audit` |
    | `prep` | `interview-round-prep` |
    | `review` | `interview-record-review` |
 
@@ -82,10 +89,11 @@
 | --- | --- | --- |
 | 全局规则 | `global/AGENTS.md` | 所有任务 |
 | 嵌入式规则 | `global/embedded.md` | 默认全局常驻（由全局 `opencode.json` 的 `instructions` 引入）；可用 `-EmbeddedRoot` 限定到工程树 |
+| 学术规则 | `global/academic.md` | 默认全局常驻；非学术任务不启用，不参与上下文 |
 | 技能正文 | `skills/*/SKILL.md` | 匹配时加载，任意目录 |
-| 审查者 | `agents/embedded-reviewer.md` | 被派发时 |
+| 审查者 | `agents/*.md` | 被派发时 |
 
-新增规则时先判断它属于哪一层：换个技术栈还成立 → 全局；只对 MCU 或本工作流成立 → 嵌入式。不要把专用规则写进全局文件。
+新增规则时先判断它属于哪一层：换个技术栈还成立 → 全局；只对 MCU 或本工作流成立 → 嵌入式；只对论文/仿真/审稿成立 → 学术。不要把专用规则写进全局文件。
 
 ## 工作流真源与修改入口
 
