@@ -1,6 +1,7 @@
 # 评阅标准（academic-audit）
 
 来源：用户在 2026-09 自制的 `PAPER_REVIEW_STANDARD_FROM_SR_HISTORY.md`（会话 D 提示词），本文件是仓库内的维护版本。
+2026-09 的原始版本按字节留档在 `review-standard-source-2026-09.md`，只作底本，不维护。
 核心要求来自 `D1`：先给审核方案、区分必改与可选、不猜 PDF 看不到的内容；输入边界来自 `B266` `B267`（只给 PDF，按历史标准评）。
 语言类检查不在这里重复，统一指向 `../../academic-voice/references/writing-rules.md`。
 
