@@ -44,6 +44,9 @@ if (-not $Destination) {
 $installRoot = Split-Path -Parent $Destination
 $skillRoot = Join-Path $PSScriptRoot 'skills'
 
+# 外部技能：仓库不管、不装、不校验。换机器需要时由用户自行安装，见 EXTERNAL-SKILLS.md。
+$externalSkills = @('ppt-master')
+
 # ---------------------------------------------------------------- 来源卡
 
 # 读取真源仓库信息。git 不可用时各项为 $null，不影响安装。
@@ -292,6 +295,10 @@ if ($Verify) {
         if (Test-Path -LiteralPath $Destination) {
             foreach ($dir in (Get-ChildItem -LiteralPath $Destination -Directory)) {
                 if ($dir.Name -in $available.Name) { continue }
+                if ($dir.Name -in $externalSkills) {
+                    Write-Output ("SKIP     skills/{0}（外部技能，不校验）" -f $dir.Name)
+                    continue
+                }
                 if (Test-Path -LiteralPath (Join-Path $dir.FullName 'SKILL.md')) {
                     Write-Output ("EXTRA    skills/{0}（安装目录有，仓库没有）" -f $dir.Name)
                     $drift = $true
@@ -422,6 +429,10 @@ New-Item -ItemType Directory -Path $Destination -Force | Out-Null
 
 foreach ($name in $names) {
     if ($name -notmatch '^[a-z0-9-]+$') { throw "Invalid skill name: $name" }
+    if ($name -in $externalSkills) {
+        Write-Output "SKIP     skill $name（外部技能，仓库不安装，见 EXTERNAL-SKILLS.md）"
+        continue
+    }
     $source = Join-Path $skillRoot $name
     if (-not (Test-Path -LiteralPath (Join-Path $source 'SKILL.md'))) { throw "Missing skill in maintenance repository: $source" }
     $target = Join-Path $Destination $name
